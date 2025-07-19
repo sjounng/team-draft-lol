@@ -1,0 +1,46 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://aws-0-ap-northeast-2.pooler.supabase.com:6543/postgres?sslmode=require&reWriteBatchedInserts=true&preferQueryMode=simple
+    username: postgres.zkabkriyrclbabnubvte
+    password: thdwnsdn313
+    hikari:
+      maximum-pool-size: 1
+      minimum-idle: 0
+      connection-timeout: 60000
+      idle-timeout: 120000
+      max-lifetime: 300000
+      leak-detection-threshold: 120000
+      connection-test-query: SELECT 1
+      validation-timeout: 5000
+      initialization-fail-timeout: 30000
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          batch_size: 1
+          batch_versioned_data: false
+        order_inserts: false
+        order_updates: false
+        batch_fetch_style: LEGACY
+        connection:
+          provider_disables_autocommit: false
+        session:
+          events:
+            log: false
+        statement:
+          batch_size: 1
+          fetch_size: 1
+    show-sql: false
+
+server:
+  port: 8080
+  shutdown: graceful
+
+spring.lifecycle.timeout-per-shutdown-phase: 30s
+
+jwt:
+  secret: team-draft-lol-jwt-secret-key-2024-super-secure-and-long-enough-for-hmac-sha256-algorithm

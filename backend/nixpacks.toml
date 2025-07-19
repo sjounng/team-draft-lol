@@ -1,0 +1,11 @@
+[phases.setup]
+nixPkgs = ["openjdk17"]
+
+[phases.install]
+cmds = ["./gradlew build -x test"]
+
+[phases.build]
+cmds = ["cp build/libs/*.jar app.jar"]
+
+[start]
+cmd = "java -jar app.jar" 
