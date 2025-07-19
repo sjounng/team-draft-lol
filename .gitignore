@@ -15,6 +15,12 @@ dist/
 .env.test.local
 .env.production.local
 
+# Spring Boot configuration files
+backend/src/main/resources/application.properties
+backend/src/main/resources/application.yml
+backend/src/main/resources/application-*.properties
+backend/src/main/resources/application-*.yml
+
 # IDE
 .vscode/
 .idea/
