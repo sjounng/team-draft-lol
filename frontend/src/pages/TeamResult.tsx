@@ -5,6 +5,7 @@ import TeamPlayerCard from "../components/TeamPlayerCard";
 import Button from "../components/Button";
 import LogoutMessage from "./LogoutMessage";
 import { useAuth } from "../contexts/AuthContext";
+import API_BASE_URL from "../config/api";
 
 interface TeamPlayer {
   playerId: number;
@@ -222,7 +223,7 @@ const TeamResult = () => {
         teamResult.currentCombination % teamResult.totalCombinations;
 
       const response = await axios.post(
-        "http://localhost:8080/api/teams/reroll",
+        `${API_BASE_URL}/api/teams/reroll`,
         { playerIds },
         {
           headers: { Authorization: `Bearer ${token}` },
@@ -303,13 +304,9 @@ const TeamResult = () => {
         playerRecords,
       };
 
-      await axios.post(
-        "http://localhost:8080/api/game-records",
-        gameRecordData,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      await axios.post(`${API_BASE_URL}/api/game-records`, gameRecordData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       alert("전적이 생성되었습니다! 전적 페이지에서 상세 정보를 수정하세요.");
       navigate("/records");

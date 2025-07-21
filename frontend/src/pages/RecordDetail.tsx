@@ -252,143 +252,120 @@ const RecordDetail = () => {
   const calculatePlayerScoreChange = (player: PlayerGameRecord) => {
     if (!gameRecord) return 0;
 
-    // 승패에 따른 기본 점수 (승리 팀 +7점, 패배 팀 -7점)
+    // 1. 승패 기본점수
     const isWinner =
       (player.teamNumber === 1 && gameRecord.team1Won) ||
       (player.teamNumber === 2 && !gameRecord.team1Won);
-    const baseWinLossScore = isWinner ? 7.0 : -7.0;
+    let total = isWinner ? 7 : -7;
 
-    // 기본 점수 계산: (킬수 + 어시스트) / 데스수 (데스가 0이면 킬+어시스트)
-    const baseScore =
-      player.deaths === 0
-        ? player.kills + player.assists
-        : Math.round((player.kills + player.assists) / player.deaths);
-
-    // 포지션별 가중치 적용
-    const getPositionMultiplier = (position: string) => {
-      switch (position) {
-        case "TOP":
-          return 3.0;
-        case "JGL":
-        case "MID":
-          return 2.5;
-        case "ADC":
-        case "SUP":
-          return 2.0;
-        default:
-          return 0.5;
-      }
-    };
-
-    const positionMultiplier = getPositionMultiplier(player.assignedPosition);
-    let weightedScore;
-
-    if (isWinner) {
-      // 승리 팀: 기존 방식 (KDA가 높을수록 높은 점수)
-      weightedScore = baseScore * positionMultiplier;
-      // 최소 +7점 보장
-      weightedScore = Math.max(7.0, weightedScore);
-    } else {
-      // 패배 팀: 포지션 가중치를 먼저 적용한 후 역수 처리
-      // KDA가 높을수록 덜 깎임 (최소 -5점 보장)
-      const weightedBaseScore = baseScore * positionMultiplier;
-      const inverseScore =
-        weightedBaseScore === 0 ? 5.0 : Math.min(5.0, 10.0 / weightedBaseScore);
-      weightedScore = -inverseScore; // 음수로 만들어서 감소점수로 만듦
-    }
-
-    // 승패에 따른 점수 적용
-    let finalScore = isWinner ? weightedScore : weightedScore; // 패배 팀은 이미 음수
-
-    // 승패 기본 점수 추가
-    finalScore += baseWinLossScore;
-
-    // 골드 보너스 적용
-    const goldBonus = Math.round(
-      (gameRecord.team1Gold / gameRecord.team2Gold) * 0.5
-    );
-    if (player.teamNumber === 1) {
-      finalScore += isWinner ? goldBonus : -goldBonus;
-    } else {
-      finalScore += isWinner ? goldBonus : -goldBonus;
-    }
-
-    // 서폿 시야 보너스 적용
-    if (player.assignedPosition === "SUP") {
-      const opponentSupport = gameRecord.playerRecords.find(
-        (p) =>
-          p.assignedPosition === "SUP" && p.teamNumber !== player.teamNumber
-      );
-
-      if (opponentSupport) {
-        const visionDiff = (player.cs - opponentSupport.cs) / 10;
-        finalScore += isWinner ? visionDiff : -visionDiff;
-      }
-    }
-
-    // CS 보너스 적용 (서폿 제외)
-    if (player.assignedPosition !== "SUP") {
-      // 같은 포지션의 상대방 찾기
-      const opponent = gameRecord.playerRecords.find(
-        (p) =>
-          p.assignedPosition === player.assignedPosition &&
-          p.teamNumber !== player.teamNumber
-      );
-
-      if (opponent) {
-        // CS 차이 계산
-        const csDifference = player.cs - opponent.cs;
-        // 차이 / 5를 정수화
-        const csBonus = csDifference / 5;
-        // 승패에 따른 보너스 적용
-        finalScore += isWinner ? csBonus : -csBonus;
-      }
-    }
-
-    // 상대방과의 점수 격차 보너스/페널티 적용
+    // 2. KDA (포지션별 계수)
+    const getKDA = (kills: number, deaths: number, assists: number) =>
+      deaths === 0 ? kills + assists : (kills + assists) / deaths;
+    const kda = getKDA(player.kills, player.deaths, player.assists);
     const opponent = gameRecord.playerRecords.find(
       (p) =>
         p.assignedPosition === player.assignedPosition &&
         p.teamNumber !== player.teamNumber
     );
+    const kdaOpponent = opponent
+      ? getKDA(opponent.kills, opponent.deaths, opponent.assists)
+      : 1;
+    const laneCoef: Record<string, number> = {
+      TOP: 2,
+      JGL: 1.5,
+      MID: 1.5,
+      ADC: 1.2,
+      SUP: 1,
+    };
+    const coef = laneCoef[player.assignedPosition] || 1;
+    if (isWinner) {
+      total += Math.round(kda * coef);
+    } else {
+      total -= Math.round((kdaOpponent / (kda || 1)) * coef);
+    }
 
+    // 3. 팀 골드 차이
+    const myTeamGold =
+      player.teamNumber === 1 ? gameRecord.team1Gold : gameRecord.team2Gold;
+    const oppTeamGold =
+      player.teamNumber === 1 ? gameRecord.team2Gold : gameRecord.team1Gold;
+    const goldDiff = Math.round((myTeamGold / (oppTeamGold || 1)) * 5);
+    total += isWinner ? goldDiff : -goldDiff;
+
+    // 4. 팀 킬 차이
+    const myTeamKills =
+      player.teamNumber === 1 ? gameRecord.team1Kills : gameRecord.team2Kills;
+    const oppTeamKills =
+      player.teamNumber === 1 ? gameRecord.team2Kills : gameRecord.team1Kills;
+    const killDiff = Math.round((myTeamKills - oppTeamKills) * 0.5);
+    total += isWinner ? killDiff : -killDiff;
+
+    // 5. 맞라이너와 CS(서폿은 시야점수) 차이
     if (opponent) {
-      const myScore = player.kills + player.assists; // 내 점수 (KDA 기반)
-      const opponentScore = opponent.kills + opponent.assists; // 상대 점수 (KDA 기반)
+      const cs = player.cs;
+      const csOpponent = opponent.cs;
+      const csCoef = Math.round(
+        (Math.max(cs, csOpponent) / Math.max(Math.min(cs, csOpponent), 1)) * 5
+      );
+      total += cs > csOpponent ? csCoef : -csCoef;
+    }
 
-      if (opponentScore > myScore) {
-        // 상대방 점수가 높은 경우
-        if (isWinner) {
-          // 이긴 경우: (상대 점수 / 내 점수) * 2 추가
-          const bonus = (opponentScore / myScore) * 2;
-          finalScore += bonus;
+    // 6. 맞라이너와 KDA 차이
+    if (opponent) {
+      const kdaCoef = Math.round(
+        (Math.max(kda, kdaOpponent) / Math.max(Math.min(kda, kdaOpponent), 1)) *
+          5
+      );
+      total += kda > kdaOpponent ? kdaCoef : -kdaCoef;
+    }
+
+    // 7. 맞라이너와 점수 차이
+    if (opponent) {
+      const myScore = player.beforeScore ?? 500;
+      const oppScore = opponent.beforeScore ?? 500;
+      const scoreCoef =
+        Math.max(myScore, oppScore) / Math.max(Math.min(myScore, oppScore), 1);
+      if (myScore < oppScore) {
+        if (!isWinner) {
+          total += Math.round(scoreCoef); // 낮은사람이 졌을 때
+          total -= Math.round(scoreCoef * 3);
         } else {
-          // 진 경우: (내 점수 / 상대 점수) * 2 추가
-          const bonus = (myScore / opponentScore) * 2;
-          finalScore += bonus;
-        }
-      } else if (myScore > opponentScore) {
-        // 내 점수가 높은 경우
-        if (isWinner) {
-          // 이긴 경우: (상대 점수 / 내 점수) * 2 빼기
-          const penalty = (opponentScore / myScore) * 2;
-          finalScore -= penalty;
-        } else {
-          // 진 경우: (내 점수 / 상대 점수) * 2 빼기
-          const penalty = (myScore / opponentScore) * 2;
-          finalScore -= penalty;
+          total += Math.round(scoreCoef * 3); // 낮은사람이 이겼을 때
+          total -= Math.round(scoreCoef * 5);
         }
       }
     }
 
-    // 최종 점수 제한 적용
-    if (isWinner) {
-      finalScore = Math.max(7, Math.min(75, finalScore)); // 승리 팀 최소 +7점, 최대 +75점
-    } else {
-      finalScore = Math.min(-7, Math.max(-75, finalScore)); // 패배 팀 최소 -7점, 최대 -75점
-    }
+    // 8. 점수 제한
+    if (isWinner) total = Math.max(10, Math.min(75, total));
+    else total = Math.max(-75, Math.min(-10, total));
 
-    return Math.round(finalScore);
+    // 9. 연승/연패 보너스 (별도)
+    // 실제 반영은 streakBonus에서 처리
+
+    return Math.round(total);
+  };
+
+  // 연승/연패 보너스 계산 함수 (백엔드와 동일하게)
+  const getStreakBonus = (streak: number, isWinner: boolean) => {
+    const futureStreak = isWinner
+      ? streak < 0
+        ? 1
+        : streak + 1
+      : streak > 0
+      ? -1
+      : streak - 1;
+    if (isWinner) {
+      if (futureStreak >= 6) return 5;
+      else if (futureStreak >= 4) return 3;
+      else if (futureStreak >= 2) return 2;
+      else return 0;
+    } else {
+      if (futureStreak <= -6) return -5;
+      else if (futureStreak <= -4) return -3;
+      else if (futureStreak <= -2) return -2;
+      else return 0;
+    }
   };
 
   const renderPlayerCard = (player: PlayerGameRecord, isWinner: boolean) => {
@@ -602,6 +579,7 @@ const RecordDetail = () => {
                       {/* 총 점수 변화량 표시 (반영이 안된 경우에만) */}
                       {!gameRecord.applied &&
                         (() => {
+                          // 플레이어의 현재 연승/연패 상태 가져오기
                           const currentPlayer = players.find(
                             (p) => p.playerId === player.playerId
                           );
@@ -610,39 +588,35 @@ const RecordDetail = () => {
                           const isWinner =
                             (player.teamNumber === 1 && gameRecord.team1Won) ||
                             (player.teamNumber === 2 && !gameRecord.team1Won);
-                          let futureStreak;
-                          if (isWinner) {
-                            futureStreak =
-                              currentStreak < 0 ? 1 : currentStreak + 1;
-                          } else {
-                            futureStreak =
-                              currentStreak > 0 ? -1 : currentStreak - 1;
-                          }
-                          let streakBonus = 0;
-                          if (isWinner) {
-                            if (futureStreak >= 6) streakBonus = 5;
-                            else if (futureStreak >= 4) streakBonus = 3;
-                            else if (futureStreak >= 2) streakBonus = 2;
-                          } else {
-                            if (futureStreak <= -6) streakBonus = -5;
-                            else if (futureStreak <= -4) streakBonus = -3;
-                            else if (futureStreak <= -2) streakBonus = -2;
-                          }
-
-                          return streakBonus !== 0 ? (
+                          const streakBonus = getStreakBonus(
+                            currentStreak,
+                            isWinner
+                          );
+                          const scoreChange =
+                            calculatePlayerScoreChange(player);
+                          const totalChange = scoreChange + streakBonus;
+                          return (
                             <div className="text-sm font-semibold mt-1">
                               <span
                                 className={
-                                  scoreChange + streakBonus >= 0
+                                  totalChange >= 0
                                     ? "text-blue-600 dark:text-blue-400"
                                     : "text-red-600 dark:text-red-400"
                                 }
                               >
-                                총 {scoreChange + streakBonus >= 0 ? "+" : ""}
-                                {scoreChange + streakBonus}점
+                                총 {totalChange >= 0 ? "+" : ""}
+                                {totalChange}점
                               </span>
+                              {streakBonus !== 0 && (
+                                <span className="text-yellow-500 dark:text-yellow-400">
+                                  {" "}
+                                  {streakBonus >= 0 ? "+" : ""}
+                                  {streakBonus}{" "}
+                                  {streakBonus > 0 ? "연승중" : "연패중"}
+                                </span>
+                              )}
                             </div>
-                          ) : null;
+                          );
                         })()}
                     </div>
                   )}

@@ -2,6 +2,7 @@ import type { FC } from "react";
 import Button from "./Button";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import API_BASE_URL from "../config/api";
 
 interface PlayerCardProps {
   id: number;
@@ -49,10 +50,8 @@ const PlayerCard: FC<PlayerCardProps> = ({
         return;
       }
 
-      await axios.delete(`http://localhost:8080/api/players/${id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      await axios.delete(`${API_BASE_URL}/api/players/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (onDelete) {

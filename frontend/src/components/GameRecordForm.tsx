@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
+import API_BASE_URL from "../config/api";
 import Button from "./Button";
 import Input from "./Input";
 
@@ -140,13 +141,9 @@ const GameRecordForm: React.FC<GameRecordFormProps> = ({
         playerRecords,
       };
 
-      await axios.post(
-        "http://localhost:8080/api/game-records",
-        gameRecordData,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      await axios.post(`${API_BASE_URL}/api/game-records`, gameRecordData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       onSuccess();
     } catch (error) {

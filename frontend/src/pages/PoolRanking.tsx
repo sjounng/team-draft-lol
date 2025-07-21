@@ -4,6 +4,7 @@ import axios from "axios";
 import Button from "../components/Button";
 import LogoutMessage from "./LogoutMessage";
 import { useAuth } from "../contexts/AuthContext";
+import API_BASE_URL from "../config/api";
 
 interface Player {
   playerId: number;
@@ -30,12 +31,9 @@ const PoolRanking = () => {
   const fetchPoolRanking = useCallback(async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.get(
-        `http://localhost:8080/api/pools/${poolId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+      const response = await axios.get(`${API_BASE_URL}/api/pools/${poolId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       const poolData = response.data;
       setPool(poolData);
 

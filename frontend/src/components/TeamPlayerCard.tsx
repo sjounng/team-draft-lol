@@ -19,7 +19,7 @@ interface TeamPlayerCardProps {
 
 const TeamPlayerCard: FC<TeamPlayerCardProps> = ({
   name,
-  lolId,
+
   originalScore,
   adjustedScore,
   assignedPosition,
@@ -75,7 +75,7 @@ const TeamPlayerCard: FC<TeamPlayerCardProps> = ({
       )}
 
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-base font-bold text-text-primary dark:text-text-secondary">
+        <h3 className="text-2xl font-bold text-text-primary dark:text-text-secondary">
           {assignedPosition}
         </h3>
         <span
@@ -86,29 +86,28 @@ const TeamPlayerCard: FC<TeamPlayerCardProps> = ({
       </div>
 
       <div className="space-y-0.5">
-        <p className="font-semibold text-sm text-text-primary dark:text-text-secondary">
+        <p className="font-bold text-2xl text-center text-text-primary dark:text-text-secondary">
           {name}
         </p>
-        <p className="text-xs text-text-muted">{lolId}</p>
 
-        <div className="flex justify-between items-center mt-1">
+        <div className="flex justify-between items-center">
           <div>
-            <p className="text-xs text-text-muted">
+            <p className="text-xs text-text-muted mt-7">
               main: {mainLane} sub: {subLane}
             </p>
           </div>
-          <div className="text-right">
+          <div className="text-right text-2xl">
             {adjustedScore !== originalScore ? (
               <>
-                <p className="text-base font-bold text-accent-yellow">
+                <p className="text-2xl font-bold text-accent-yellow">
                   {adjustedScore}
                 </p>
-                <p className="text-xs text-text-muted line-through">
+                <p className="text-lg text-text-muted line-through">
                   {originalScore}
                 </p>
               </>
             ) : (
-              <p className="text-base font-bold text-text-primary dark:text-text-secondary">
+              <p className="text-2xl font-bold text-text-primary dark:text-text-secondary mt-7">
                 {originalScore}
               </p>
             )}

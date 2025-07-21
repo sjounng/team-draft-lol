@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
 import java.util.List;
+import com.example.teamdraftlol.dto.response.GameRecordSummaryResponse;
 
 @RestController
 @RequestMapping("/api/game-records")
@@ -33,13 +34,12 @@ public class GameRecordController {
     }
     
     @GetMapping
-    public ResponseEntity<List<GameRecordResponse>> getUserGameRecords(
+    public ResponseEntity<List<GameRecordSummaryResponse>> getUserGameRecords(
             @RequestHeader("Authorization") String authorization
     ) {
         String token = authorization.replace("Bearer ", "");
         String userId = JwtUtil.getUserIdFromToken(token);
-        
-        List<GameRecordResponse> gameRecords = gameRecordService.getUserGameRecords(userId);
+        List<GameRecordSummaryResponse> gameRecords = gameRecordService.getUserGameRecords(userId);
         return ResponseEntity.ok(gameRecords);
     }
     
@@ -103,21 +103,6 @@ public class GameRecordController {
         }
     }
     
-    @PostMapping("/recalculate-scores")
-    public ResponseEntity<String> recalculateAllScores(
-            @RequestHeader("Authorization") String authorization
-    ) {
-        String token = authorization.replace("Bearer ", "");
-        String userId = JwtUtil.getUserIdFromToken(token);
-        
-        try {
-            gameRecordService.recalculateAllScores(userId);
-            return ResponseEntity.ok("모든 게임 기록의 점수가 새로운 시스템으로 재계산되었습니다.");
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body("점수 재계산 중 오류가 발생했습니다: " + e.getMessage());
-        }
-    }
-
     @PutMapping("/{gameId}")
     public ResponseEntity<GameRecordResponse> updateGameRecord(
             @RequestHeader("Authorization") String authorization,

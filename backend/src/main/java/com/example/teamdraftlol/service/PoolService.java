@@ -79,20 +79,25 @@ public class PoolService {
 
     @Transactional
     public PlayerResponse addPlayer(UUID userId, Long poolId, PlayerRequest req) {
-        Pool pool = poolRepository.findById(poolId)
-                .orElseThrow(() -> new IllegalArgumentException("Pool not found"));
-        
+        // 비관적 락을 걸고 풀을 조회
+        Pool pool = poolRepository.findByIdForUpdate(poolId);
+        if (pool == null) {
+            throw new IllegalArgumentException("Pool not found");
+        }
         // 소유자이거나 멤버인지 확인
-        boolean hasAccess = pool.getOwner().getId().equals(userId) || 
-                           pool.getMembers().stream().anyMatch(member -> member.getId().equals(userId));
-        
+        boolean hasAccess = pool.getOwner().getId().equals(userId) ||
+                pool.getMembers().stream().anyMatch(member -> member.getId().equals(userId));
         if (!hasAccess) {
             throw new IllegalArgumentException("권한이 없습니다.");
         }
-
+        // 중복 lolId 체크
+        boolean alreadyExists = pool.getPlayers().stream()
+                .anyMatch(p -> p.getLolId().equals(req.getLolId()));
+        if (alreadyExists) {
+            throw new IllegalArgumentException("이미 동일한 LOL ID의 플레이어가 등록되어 있습니다.");
+        }
         Profile owner = profileRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("Owner not found"));
-
         Player player = Player.builder()
                 .owner(owner)
                 .name(req.getName())
@@ -103,11 +108,9 @@ public class PoolService {
                 .winLossStreak(0)
                 .createdAt(Instant.now())
                 .build();
-
         Player savedPlayer = playerRepository.save(player);
         pool.getPlayers().add(savedPlayer);
         poolRepository.save(pool);
-
         return PlayerResponse.fromEntity(savedPlayer);
     }
 

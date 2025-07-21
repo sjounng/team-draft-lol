@@ -6,37 +6,19 @@ import LogoutMessage from "./LogoutMessage";
 import { useAuth } from "../contexts/AuthContext";
 import API_BASE_URL from "../config/api";
 
-interface PlayerGameRecord {
-  playerId: number;
-  playerName: string;
-  lolId: string;
-  teamNumber: number;
-  assignedPosition: string;
-  kills: number;
-  deaths: number;
-  assists: number;
-  cs: number;
-  beforeScore: number;
-  afterScore: number;
-  scoreChange: number;
-}
-
-interface GameRecord {
+interface GameRecordSummary {
   gameId: number;
   team1Won: boolean;
   team1Kills: number;
   team2Kills: number;
   team1Gold: number;
   team2Gold: number;
-  team1SupportVision: number;
-  team2SupportVision: number;
-  applied: boolean; // isApplied에서 applied로 변경
+  isApplied: boolean;
   createdAt: string;
-  playerRecords: PlayerGameRecord[];
 }
 
 const Records = () => {
-  const [gameRecords, setGameRecords] = useState<GameRecord[]>([]);
+  const [gameRecords, setGameRecords] = useState<GameRecordSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
@@ -142,12 +124,12 @@ const Records = () => {
                     </span>
                     <span
                       className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                        record.applied
+                        record.isApplied
                           ? "bg-green-500 text-white"
                           : "bg-yellow-500 text-black"
                       }`}
                     >
-                      {record.applied ? "반영됨" : "미반영"}
+                      {record.isApplied ? "반영됨" : "미반영"}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">

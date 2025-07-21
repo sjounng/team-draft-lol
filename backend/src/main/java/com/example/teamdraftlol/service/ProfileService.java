@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -40,10 +41,13 @@ public class ProfileService {
     }
 
     public Map<String, Object> login(ProfileRequest req) {
-        Profile profile = profileRepository.findByEmail(req.getEmail())
-                .orElseThrow(() -> new IllegalArgumentException("Invalid email or password"));
+        Optional<Profile> profileOpt = profileRepository.findByEmail(req.getEmail());
+        if (profileOpt.isEmpty()) {
+            throw new IllegalArgumentException("등록되지 않은 이메일입니다.");
+        }
+        Profile profile = profileOpt.get();
         if (!passwordEncoder.matches(req.getPassword(), profile.getPassword())) {
-            throw new IllegalArgumentException("Invalid email or password");
+            throw new IllegalArgumentException("비밀번호가 일치하지 않습니다.");
         }
         String token = JwtUtil.generateToken(profile.getId().toString());
         Map<String, Object> result = new HashMap<>();

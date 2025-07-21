@@ -5,6 +5,7 @@ import PoolCard from "../components/PoolCard";
 import LogoutMessage from "./LogoutMessage";
 import { useAuth } from "../contexts/AuthContext";
 import Button from "../components/Button";
+import API_BASE_URL from "../config/api";
 
 interface Pool {
   poolId: string;
@@ -25,7 +26,7 @@ const TeamCreate = () => {
   const fetchPools = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.get("http://localhost:8080/api/pools", {
+      const response = await axios.get(`${API_BASE_URL}/api/pools`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       setPools(response.data);

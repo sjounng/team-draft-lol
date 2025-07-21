@@ -29,7 +29,12 @@ const Login = () => {
       navigate("/players");
     } catch (err: unknown) {
       if (axios.isAxiosError(err)) {
-        setError(err.response?.data?.message || "로그인에 실패했습니다.");
+        // 백엔드에서 받은 에러 메시지를 그대로 error에 넣음
+        setError(
+          typeof err.response?.data === "string"
+            ? err.response.data
+            : err.response?.data?.message || "로그인에 실패했습니다."
+        );
       } else {
         setError("로그인에 실패했습니다.");
       }
