@@ -235,10 +235,8 @@ const TeamBuilder = () => {
         }
       );
 
-      // 팀 생성 결과를 localStorage에 저장하고 결과 페이지로 이동
-      localStorage.setItem("teamResult", JSON.stringify(response.data));
-      localStorage.setItem("selectedPlayerIds", JSON.stringify(playerIds));
-      navigate("/team-result");
+      const gameId = response.data.gameId;
+      navigate(`/records/${gameId}`);
     } catch (error) {
       console.error("팀 생성 실패:", error);
       alert("팀 생성에 실패했습니다.");

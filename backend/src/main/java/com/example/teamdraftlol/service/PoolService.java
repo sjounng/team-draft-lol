@@ -119,12 +119,9 @@ public class PoolService {
         Pool pool = poolRepository.findById(poolId)
                 .orElseThrow(() -> new IllegalArgumentException("Pool not found"));
         
-        // 소유자이거나 멤버인지 확인
-        boolean hasAccess = pool.getOwner().getId().equals(userId) || 
-                           pool.getMembers().stream().anyMatch(member -> member.getId().equals(userId));
-        
-        if (!hasAccess) {
-            throw new IllegalArgumentException("권한이 없습니다.");
+        // 소유자만 수정 가능하도록 변경
+        if (!pool.getOwner().getId().equals(userId)) {
+            throw new IllegalArgumentException("풀의 소유자만 플레이어 정보를 수정할 수 있습니다.");
         }
 
         Player player = playerRepository.findById(playerId)

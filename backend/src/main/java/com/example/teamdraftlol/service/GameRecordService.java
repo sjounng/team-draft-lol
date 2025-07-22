@@ -9,9 +9,11 @@ import com.example.teamdraftlol.dto.response.SimulatedScoreResponse;
 import com.example.teamdraftlol.entity.GameRecord;
 import com.example.teamdraftlol.entity.Player;
 import com.example.teamdraftlol.entity.PlayerGameRecord;
+import com.example.teamdraftlol.entity.Pool;
 import com.example.teamdraftlol.repository.GameRecordRepository;
 import com.example.teamdraftlol.repository.PlayerGameRecordRepository;
 import com.example.teamdraftlol.repository.PlayerRepository;
+import com.example.teamdraftlol.repository.PoolRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +23,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -29,9 +32,19 @@ public class GameRecordService {
     private final GameRecordRepository gameRecordRepository;
     private final PlayerGameRecordRepository playerGameRecordRepository;
     private final PlayerRepository playerRepository;
+    private final PoolRepository poolRepository;
     
     @Transactional
     public GameRecord createGameRecord(String userId, GameRecordRequest request) {
+        // Pool 조회
+        Pool pool = poolRepository.findById(request.getPoolId())
+                .orElseThrow(() -> new IllegalArgumentException("풀을 찾을 수 없습니다."));
+        // owner 또는 member만 추가 가능
+        boolean canAdd = pool.getOwner().getId().toString().equals(userId) ||
+                pool.getMembers().stream().anyMatch(m -> m.getId().toString().equals(userId));
+        if (!canAdd) {
+            throw new IllegalArgumentException("풀의 멤버만 전적을 추가할 수 있습니다.");
+        }
         // 게임 기록 생성
         GameRecord gameRecord = GameRecord.builder()
                 .userId(userId)
@@ -41,6 +54,7 @@ public class GameRecordService {
                 .team1Gold(request.getTeam1Gold())
                 .team2Gold(request.getTeam2Gold())
                 .isApplied(false)
+                .pool(pool)
                 .build();
         
         GameRecord savedGameRecord = gameRecordRepository.save(gameRecord);
@@ -76,6 +90,11 @@ public class GameRecordService {
     public void applyGameResultToScores(Long gameId, String userId) {
         GameRecord gameRecord = gameRecordRepository.findById(gameId)
                 .orElseThrow(() -> new IllegalArgumentException("게임 기록을 찾을 수 없습니다."));
+        
+        // Pool의 owner만 점수 반영 가능
+        if (!gameRecord.getPool().getOwner().getId().toString().equals(userId)) {
+            throw new IllegalArgumentException("풀의 소유자만 점수를 반영할 수 있습니다.");
+        }
         
         // 본인의 게임 기록인지 확인
         if (!gameRecord.getUserId().equals(userId)) {
@@ -132,14 +151,10 @@ public class GameRecordService {
             ? (s < 0 ? 1 : s + 1)
             : (s > 0 ? -1 : s - 1);
         if (isWinner) {
-            if (futureStreak >= 6) return 5;
-            else if (futureStreak >= 4) return 3;
-            else if (futureStreak >= 2) return 2;
+            if (futureStreak >= 2) return futureStreak;
             else return 0;
         } else {
-            if (futureStreak <= -6) return -5;
-            else if (futureStreak <= -4) return -3;
-            else if (futureStreak <= -2) return -2;
+            if (futureStreak <= -2) return futureStreak;
             else return 0;
         }
     }
@@ -149,62 +164,66 @@ public class GameRecordService {
             Player player = playerMap.get(record.getPlayer().getPlayerId());
             boolean isWinner = (record.getTeamNumber() == 1 && gameRecord.isTeam1Won()) ||
                     (record.getTeamNumber() == 2 && !gameRecord.isTeam1Won());
-            int total = isWinner ? 7 : -7;
+            int total = isWinner ? 0 : -15;
             double kda = record.getDeaths() == 0 ? record.getKills() + record.getAssists() : (double) (record.getKills() + record.getAssists()) / record.getDeaths();
             PlayerGameRecord opponent = playerRecords.stream()
                     .filter(p -> p.getAssignedPosition().equals(record.getAssignedPosition()) && p.getTeamNumber() != record.getTeamNumber())
                     .findFirst().orElse(null);
-            double kdaOpponent = opponent != null ? (opponent.getDeaths() == 0 ? opponent.getKills() + opponent.getAssists() : (double) (opponent.getKills() + opponent.getAssists()) / opponent.getDeaths()) : 1.0;
             double coef = getLaneCoef(record.getAssignedPosition());
+            // KDA
             if (isWinner) {
-                total += Math.round(kda * coef);
+                total += (int) Math.round(kda * coef);
             } else {
-                total -= Math.round((kdaOpponent / (kda == 0 ? 1 : kda)) * coef);
+                total -= (int) Math.round(kda * coef);
             }
+            // 골드 차이
             int myTeamGold = record.getTeamNumber() == 1 ? gameRecord.getTeam1Gold() : gameRecord.getTeam2Gold();
             int oppTeamGold = record.getTeamNumber() == 1 ? gameRecord.getTeam2Gold() : gameRecord.getTeam1Gold();
-            int goldDiff = (int) Math.round(((double) myTeamGold / (oppTeamGold == 0 ? 1 : oppTeamGold)) * 5);
+            int goldDiff = (int) Math.round(((double) myTeamGold / (oppTeamGold == 0 ? 1 : oppTeamGold)) * 3);
             total += isWinner ? goldDiff : -goldDiff;
+            // 킬 차이
             int myTeamKills = record.getTeamNumber() == 1 ? gameRecord.getTeam1Kills() : gameRecord.getTeam2Kills();
             int oppTeamKills = record.getTeamNumber() == 1 ? gameRecord.getTeam2Kills() : gameRecord.getTeam1Kills();
             int killDiff = (int) Math.round((myTeamKills - oppTeamKills) * 0.5);
             total += isWinner ? killDiff : -killDiff;
+            // CS 차이
             if (opponent != null) {
                 int cs = record.getCs();
                 int csOpponent = opponent.getCs();
-                int csCoef = (int) Math.round(((double) Math.max(cs, csOpponent) / Math.max(Math.min(cs, csOpponent), 1)) * 5);
+                double csCoefFactor = 3;
+                int csCoef = (int) Math.round(((double) Math.max(cs, csOpponent) / Math.max(Math.min(cs, csOpponent), 1)) * csCoefFactor);
                 total += cs > csOpponent ? csCoef : -csCoef;
             }
-            if (opponent != null) {
-                int kdaCoef = (int) Math.round((Math.max(kda, kdaOpponent) / Math.max(Math.min(kda, kdaOpponent), 1)) * 5);
-                total += kda > kdaOpponent ? kdaCoef : -kdaCoef;
-            }
+            // 점수 차이
             if (opponent != null) {
                 int myScore = player.getScore();
                 int oppScore = opponent.getPlayer().getScore();
-                double scoreCoef = (double) Math.max(myScore, oppScore) / Math.max(Math.min(myScore, oppScore), 1);
                 if (myScore < oppScore) {
                     if (!isWinner) {
-                        total += Math.round(scoreCoef);
-                        total -= Math.round(scoreCoef * 3);
+                        total += (int) Math.round(((double) oppScore / (myScore == 0 ? 1 : myScore)) * 2);
                     } else {
-                        total += Math.round(scoreCoef * 3);
-                        total -= Math.round(scoreCoef * 5);
+                        total += (int) Math.round(((double) oppScore / (myScore == 0 ? 1 : myScore)) * 5);
+                    }
+                } else if (myScore > oppScore) {
+                    if (!isWinner) {
+                        total -= (int) Math.round(((double) myScore / (oppScore == 0 ? 1 : oppScore)) * 5);
+                    } else {
+                        total -= (int) Math.round(((double) myScore / (oppScore == 0 ? 1 : oppScore)) * 2);
                     }
                 }
             }
             if (isWinner) total = Math.max(10, Math.min(75, total));
             else total = Math.max(-75, Math.min(-10, total));
-            // streakBonus 적용
-            int streak = record.getWinLossStreakAtGame() != null ? record.getWinLossStreakAtGame() : 0;
-            int streakBonus = getStreakBonus(streak, isWinner);
+            // streakBonus 적용 (반영 전 streak 기준)
+            Integer currentStreak = player.getWinLossStreak();
+            if (currentStreak == null) currentStreak = 0;
+            record.setWinLossStreakAtGame(currentStreak); // 반드시 업데이트 전에!
+            int streakBonus = getStreakBonus(currentStreak, isWinner);
             total += streakBonus;
             int currentScore = player.getScore();
             int newScore = Math.max(0, currentScore + total);
             player.setScore(newScore);
-            Integer currentStreak = player.getWinLossStreak();
-            if (currentStreak == null) currentStreak = 0;
-            record.setWinLossStreakAtGame(currentStreak);
+            // 이제 streak 업데이트 (반영 후)
             if (isWinner) {
                 if (currentStreak < 0) {
                     player.setWinLossStreak(1);
@@ -225,11 +244,11 @@ public class GameRecordService {
 
     private double getLaneCoef(String position) {
         switch (position) {
-            case "TOP": return 2.0;
-            case "JGL": return 1.5;
-            case "MID": return 1.5;
-            case "ADC": return 1.2;
-            case "SUP": return 1.0;
+            case "TOP": return 1.5;
+            case "JGL": return 1.2;
+            case "MID": return 1.2;
+            case "ADC": return 1.0;
+            case "SUP": return 0.8;
             default: return 1.0;
         }
     }
@@ -251,7 +270,7 @@ public class GameRecordService {
         }
         int myTeamGold = record.getTeamNumber() == 1 ? gameRecord.getTeam1Gold() : gameRecord.getTeam2Gold();
         int oppTeamGold = record.getTeamNumber() == 1 ? gameRecord.getTeam2Gold() : gameRecord.getTeam1Gold();
-        int goldDiff = (int) Math.round(((double) myTeamGold / (oppTeamGold == 0 ? 1 : oppTeamGold)) * 5);
+        int goldDiff = (int) Math.round(((double) myTeamGold / (oppTeamGold == 0 ? 1 : oppTeamGold)) * 3);
         total += isWinner ? goldDiff : -goldDiff;
         int myTeamKills = record.getTeamNumber() == 1 ? gameRecord.getTeam1Kills() : gameRecord.getTeam2Kills();
         int oppTeamKills = record.getTeamNumber() == 1 ? gameRecord.getTeam2Kills() : gameRecord.getTeam1Kills();
@@ -291,8 +310,12 @@ public class GameRecordService {
     }
     
     public List<GameRecordSummaryResponse> getUserGameRecords(String userId) {
-        // 게임 기록 조회
-        List<GameRecord> gameRecords = gameRecordRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        // 내가 owner이거나 멤버로 속한 모든 풀 조회
+        List<Pool> myPools = poolRepository.findByOwnerIdOrMemberId(UUID.fromString(userId));
+        List<Long> myPoolIds = myPools.stream().map(Pool::getPoolId).collect(Collectors.toList());
+        if (myPoolIds.isEmpty()) return new ArrayList<>();
+        // 해당 풀들의 모든 전적 조회
+        List<GameRecord> gameRecords = gameRecordRepository.findByPool_PoolIdInOrderByCreatedAtDesc(myPoolIds);
         return gameRecords.stream()
                 .map(gr -> GameRecordSummaryResponse.builder()
                         .gameId(gr.getGameId())
@@ -311,12 +334,15 @@ public class GameRecordService {
         GameRecord gameRecord = gameRecordRepository.findById(gameId)
                 .orElseThrow(() -> new IllegalArgumentException("게임 기록을 찾을 수 없습니다."));
         
-        // 본인의 게임 기록인지 확인
-        if (!gameRecord.getUserId().equals(userId)) {
+        // 풀의 owner 또는 멤버만 열람 가능하도록 권한 체크
+        Pool pool = gameRecord.getPool();
+        boolean isOwner = pool.getOwner().getId().toString().equals(userId);
+        boolean isMember = pool.getMembers().stream().anyMatch(m -> m.getId().toString().equals(userId));
+        if (!isOwner && !isMember) {
             throw new IllegalArgumentException("접근 권한이 없습니다.");
         }
         
-        return convertToResponse(gameRecord);
+        return convertToResponse(gameRecord, userId);
     }
 
     @Transactional
@@ -324,9 +350,12 @@ public class GameRecordService {
         GameRecord gameRecord = gameRecordRepository.findById(gameId)
                 .orElseThrow(() -> new IllegalArgumentException("게임 기록을 찾을 수 없습니다."));
         
-        // 본인의 게임 기록인지 확인
-        if (!gameRecord.getUserId().equals(userId)) {
-            throw new IllegalArgumentException("접근 권한이 없습니다.");
+        // Pool의 owner 또는 멤버만 수정 가능
+        Pool pool = gameRecord.getPool();
+        boolean isOwner = pool.getOwner().getId().toString().equals(userId);
+        boolean isMember = pool.getMembers().stream().anyMatch(m -> m.getId().toString().equals(userId));
+        if (!isOwner && !isMember) {
+            throw new IllegalArgumentException("풀의 소유자 또는 멤버만 전적을 수정할 수 있습니다.");
         }
         
         // 이미 점수가 반영된 게임이면 먼저 점수를 되돌림
@@ -372,10 +401,10 @@ public class GameRecordService {
         
         playerGameRecordRepository.saveAll(newPlayerRecords);
         
-        return convertToResponse(savedGameRecord);
+        return convertToResponse(savedGameRecord, userId);
     }
 
-    private GameRecordResponse convertToResponse(GameRecord gameRecord) {
+    private GameRecordResponse convertToResponse(GameRecord gameRecord, String userId) {
         List<PlayerGameRecord> playerRecords = playerGameRecordRepository.findByGameRecord_GameId(gameRecord.getGameId());
         
         List<PlayerGameRecordResponse> playerResponses = playerRecords.stream()
@@ -418,6 +447,13 @@ public class GameRecordService {
                 })
                 .collect(Collectors.toList());
         
+        Pool pool = gameRecord.getPool();
+        String poolOwnerId = pool.getOwner().getId().toString();
+        List<String> poolMembers = pool.getMembers().stream()
+            .map(member -> member.getId().toString())
+            .collect(Collectors.toList());
+        boolean isOwner = poolOwnerId.equals(userId);
+        boolean isMember = poolMembers.contains(userId);
         return GameRecordResponse.builder()
                 .gameId(gameRecord.getGameId())
                 .team1Won(gameRecord.isTeam1Won())
@@ -428,6 +464,8 @@ public class GameRecordService {
                 .isApplied(gameRecord.isApplied())
                 .createdAt(gameRecord.getCreatedAt())
                 .playerRecords(playerResponses)
+                .isOwner(isOwner)
+                .isMember(isMember)
                 .build();
     }
     
@@ -552,7 +590,12 @@ public class GameRecordService {
     }
 
     public List<SimulatedScoreResponse> simulateScores(String userId) {
-        List<GameRecord> gameRecords = gameRecordRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        // 내가 owner이거나 멤버로 속한 모든 풀 조회
+        List<Pool> myPools = poolRepository.findByOwnerIdOrMemberId(UUID.fromString(userId));
+        List<Long> myPoolIds = myPools.stream().map(Pool::getPoolId).collect(Collectors.toList());
+        if (myPoolIds.isEmpty()) return new ArrayList<>();
+        // 해당 풀들의 모든 전적 조회
+        List<GameRecord> gameRecords = gameRecordRepository.findByPool_PoolIdInOrderByCreatedAtDesc(myPoolIds);
         List<SimulatedScoreResponse> result = new ArrayList<>();
         for (GameRecord gameRecord : gameRecords) {
             List<PlayerGameRecord> playerRecords = playerGameRecordRepository.findByGameRecord_GameId(gameRecord.getGameId());

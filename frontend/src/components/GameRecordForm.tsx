@@ -50,12 +50,18 @@ interface GameRecordFormProps {
   teamResult: TeamResult;
   onClose: () => void;
   onSuccess: () => void;
+  poolId: number; // 추가: 소속된 풀 ID
+  isOwner?: boolean;
+  isMember?: boolean;
 }
 
 const GameRecordForm: React.FC<GameRecordFormProps> = ({
   teamResult,
   onClose,
   onSuccess,
+  poolId,
+  isOwner,
+  isMember,
 }) => {
   const [team1Won, setTeam1Won] = useState<boolean | null>(null);
   const [team1Kills, setTeam1Kills] = useState<number>(0);
@@ -133,6 +139,7 @@ const GameRecordForm: React.FC<GameRecordFormProps> = ({
       const token = localStorage.getItem("token");
 
       const gameRecordData = {
+        poolId, // poolId 포함
         team1Won,
         team1Kills,
         team2Kills,

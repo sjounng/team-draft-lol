@@ -19,4 +19,6 @@ public class GameRecordResponse {
     private boolean isApplied;
     private LocalDateTime createdAt;
     private List<PlayerGameRecordResponse> playerRecords;
+    private boolean isOwner; // owner 여부
+    private boolean isMember; // 멤버 여부
 } 

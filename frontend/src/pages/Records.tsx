@@ -13,7 +13,7 @@ interface GameRecordSummary {
   team2Kills: number;
   team1Gold: number;
   team2Gold: number;
-  isApplied: boolean;
+  applied: boolean;
   createdAt: string;
 }
 
@@ -124,12 +124,12 @@ const Records = () => {
                     </span>
                     <span
                       className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                        record.isApplied
+                        record.applied
                           ? "bg-green-500 text-white"
                           : "bg-yellow-500 text-black"
                       }`}
                     >
-                      {record.isApplied ? "반영됨" : "미반영"}
+                      {record.applied ? "반영됨" : "미반영"}
                     </span>
                   </div>
                   <div className="flex items-center gap-2">

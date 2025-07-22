@@ -33,6 +33,8 @@ interface GameRecord {
   applied: boolean;
   createdAt: string;
   playerRecords: PlayerGameRecord[];
+  isOwner?: boolean; // owner 여부
+  isMember?: boolean; // 멤버 여부
 }
 
 const RecordDetail = () => {
@@ -45,7 +47,11 @@ const RecordDetail = () => {
   const [deleting, setDeleting] = useState(false);
   const [players, setPlayers] = useState<any[]>([]); // 플레이어 목록 상태 추가
   const navigate = useNavigate();
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, user } = useAuth();
+  const [isOwner, setIsOwner] = useState(false);
+  const [isMember, setIsMember] = useState(false);
+  // isMember, setIsMember 삭제
+  // kdaOpponent 변수 삭제
 
   // 편집용 상태
   const [editData, setEditData] = useState({
@@ -110,6 +116,22 @@ const RecordDetail = () => {
       fetchPlayers(); // 플레이어 목록도 함께 가져오기
     }
   }, [gameId, isLoggedIn, fetchGameRecord, fetchPlayers]);
+
+  useEffect(() => {
+    if (gameRecord && user) {
+      setIsOwner(!!gameRecord.isOwner);
+      setIsMember(!!gameRecord.isMember);
+      // 디버깅용 로그
+      console.log(
+        "user.id:",
+        user.id,
+        "isOwner:",
+        gameRecord.isOwner,
+        "isMember:",
+        gameRecord.isMember
+      );
+    }
+  }, [gameRecord, user]);
 
   const handleApplyScores = async () => {
     if (!gameRecord) return;
@@ -256,7 +278,7 @@ const RecordDetail = () => {
     const isWinner =
       (player.teamNumber === 1 && gameRecord.team1Won) ||
       (player.teamNumber === 2 && !gameRecord.team1Won);
-    let total = isWinner ? 7 : -7;
+    let total = isWinner ? 0 : -15;
 
     // 2. KDA (포지션별 계수)
     const getKDA = (kills: number, deaths: number, assists: number) =>
@@ -267,21 +289,18 @@ const RecordDetail = () => {
         p.assignedPosition === player.assignedPosition &&
         p.teamNumber !== player.teamNumber
     );
-    const kdaOpponent = opponent
-      ? getKDA(opponent.kills, opponent.deaths, opponent.assists)
-      : 1;
     const laneCoef: Record<string, number> = {
-      TOP: 2,
-      JGL: 1.5,
-      MID: 1.5,
-      ADC: 1.2,
-      SUP: 1,
+      TOP: 1.5,
+      JGL: 1.2,
+      MID: 1.2,
+      ADC: 1,
+      SUP: 0.8,
     };
     const coef = laneCoef[player.assignedPosition] || 1;
     if (isWinner) {
       total += Math.round(kda * coef);
     } else {
-      total -= Math.round((kdaOpponent / (kda || 1)) * coef);
+      total -= Math.round(kda * coef);
     }
 
     // 3. 팀 골드 차이
@@ -289,7 +308,7 @@ const RecordDetail = () => {
       player.teamNumber === 1 ? gameRecord.team1Gold : gameRecord.team2Gold;
     const oppTeamGold =
       player.teamNumber === 1 ? gameRecord.team2Gold : gameRecord.team1Gold;
-    const goldDiff = Math.round((myTeamGold / (oppTeamGold || 1)) * 5);
+    const goldDiff = Math.round((myTeamGold / (oppTeamGold || 1)) * 3);
     total += isWinner ? goldDiff : -goldDiff;
 
     // 4. 팀 킬 차이
@@ -304,43 +323,38 @@ const RecordDetail = () => {
     if (opponent) {
       const cs = player.cs;
       const csOpponent = opponent.cs;
+      let csCoefFactor = 3;
       const csCoef = Math.round(
-        (Math.max(cs, csOpponent) / Math.max(Math.min(cs, csOpponent), 1)) * 5
+        (Math.max(cs, csOpponent) / Math.max(Math.min(cs, csOpponent), 1)) *
+          csCoefFactor
       );
       total += cs > csOpponent ? csCoef : -csCoef;
     }
 
-    // 6. 맞라이너와 KDA 차이
-    if (opponent) {
-      const kdaCoef = Math.round(
-        (Math.max(kda, kdaOpponent) / Math.max(Math.min(kda, kdaOpponent), 1)) *
-          5
-      );
-      total += kda > kdaOpponent ? kdaCoef : -kdaCoef;
-    }
-
-    // 7. 맞라이너와 점수 차이
+    // 6. 맞라이너와 점수 차이
     if (opponent) {
       const myScore = player.beforeScore ?? 500;
       const oppScore = opponent.beforeScore ?? 500;
-      const scoreCoef =
-        Math.max(myScore, oppScore) / Math.max(Math.min(myScore, oppScore), 1);
       if (myScore < oppScore) {
         if (!isWinner) {
-          total += Math.round(scoreCoef); // 낮은사람이 졌을 때
-          total -= Math.round(scoreCoef * 3);
+          total += Math.round((oppScore / (myScore === 0 ? 1 : myScore)) * 2);
         } else {
-          total += Math.round(scoreCoef * 3); // 낮은사람이 이겼을 때
-          total -= Math.round(scoreCoef * 5);
+          total += Math.round((oppScore / (myScore === 0 ? 1 : myScore)) * 5);
+        }
+      } else if (myScore > oppScore) {
+        if (!isWinner) {
+          total -= Math.round((myScore / (oppScore === 0 ? 1 : oppScore)) * 5);
+        } else {
+          total -= Math.round((myScore / (oppScore === 0 ? 1 : oppScore)) * 2);
         }
       }
     }
 
-    // 8. 점수 제한
+    // 7. 점수 제한
     if (isWinner) total = Math.max(10, Math.min(75, total));
     else total = Math.max(-75, Math.min(-10, total));
 
-    // 9. 연승/연패 보너스 (별도)
+    // 8. 연승/연패 보너스 (별도)
     // 실제 반영은 streakBonus에서 처리
 
     return Math.round(total);
@@ -356,14 +370,10 @@ const RecordDetail = () => {
       ? -1
       : streak - 1;
     if (isWinner) {
-      if (futureStreak >= 6) return 5;
-      else if (futureStreak >= 4) return 3;
-      else if (futureStreak >= 2) return 2;
+      if (futureStreak >= 2) return futureStreak;
       else return 0;
     } else {
-      if (futureStreak <= -6) return -5;
-      else if (futureStreak <= -4) return -3;
-      else if (futureStreak <= -2) return -2;
+      if (futureStreak <= -2) return futureStreak;
       else return 0;
     }
   };
@@ -532,46 +542,25 @@ const RecordDetail = () => {
                           const isWinner =
                             (player.teamNumber === 1 && gameRecord.team1Won) ||
                             (player.teamNumber === 2 && !gameRecord.team1Won);
-
-                          // 미래 연승/연패 상태 계산
-                          let futureStreak;
-                          if (isWinner) {
-                            futureStreak =
-                              currentStreak < 0 ? 1 : currentStreak + 1;
-                          } else {
-                            futureStreak =
-                              currentStreak > 0 ? -1 : currentStreak - 1;
-                          }
-
-                          // 보너스 계산
-                          let streakBonus = 0;
-                          if (isWinner) {
-                            if (futureStreak >= 6) streakBonus = 5;
-                            else if (futureStreak >= 4) streakBonus = 3;
-                            else if (futureStreak >= 2) streakBonus = 2;
-                          } else {
-                            if (futureStreak <= -6) streakBonus = -5;
-                            else if (futureStreak <= -4) streakBonus = -3;
-                            else if (futureStreak <= -2) streakBonus = -2;
-                          }
-
+                          const streakBonus = getStreakBonus(
+                            currentStreak,
+                            isWinner
+                          );
                           return streakBonus !== 0 ? (
                             <span className="text-yellow-500 dark:text-yellow-400">
-                              {" "}
                               {streakBonus >= 0 ? "+" : ""}
                               {streakBonus}{" "}
                               {streakBonus > 0 ? "연승중" : "연패중"}
                             </span>
                           ) : null;
                         })()}
-                      {/* 반영이 된 경우 백엔드에서 전송된 연승/연패 보너스 표시 */}
+                      {/* 반영이 된 경우 백엔드에서 전송된 연승/연패 보너스만 그대로 표시 */}
                       {gameRecord.applied &&
                         player.streakBonus !== undefined &&
                         player.streakBonus !== null &&
                         player.streakBonus !== 0 && (
                           <span className="text-yellow-500 dark:text-yellow-400">
-                            {" "}
-                            {player.streakBonus >= 0 ? "+" : ""}
+                            {player.streakBonus > 0 ? "+" : ""}
                             {player.streakBonus}{" "}
                             {player.streakBonus > 0 ? "연승중" : "연패중"}
                           </span>
@@ -730,8 +719,10 @@ const RecordDetail = () => {
             ) : (
               <>
                 <Button onClick={() => navigate("/records")}>돌아가기</Button>
-                <Button onClick={() => setEditMode(true)}>수정하기</Button>
-                {!gameRecord.applied ? (
+                {(isOwner || isMember) && (
+                  <Button onClick={() => setEditMode(true)}>수정하기</Button>
+                )}
+                {isOwner && !gameRecord.applied ? (
                   <Button
                     onClick={handleApplyScores}
                     disabled={applying}
@@ -739,11 +730,11 @@ const RecordDetail = () => {
                   >
                     {applying ? "반영 중..." : "결과 반영"}
                   </Button>
-                ) : (
+                ) : gameRecord.applied ? (
                   <span className="text-sm text-green-600 dark:text-green-400 font-semibold mt-3">
                     점수 반영 완료
                   </span>
-                )}
+                ) : null}
                 <Button
                   onClick={handleDeleteRecord}
                   disabled={deleting}

@@ -31,6 +31,9 @@ public class GameRecordRequest {
     @Min(0)
     private Integer team2Gold; // 2팀 획득 골드량
     
+    @NotNull
+    private Long poolId; // 소속된 풀 ID
+    
     @Valid
     @NotNull
     private List<PlayerGameRecordRequest> playerRecords; // 10명의 플레이어 기록

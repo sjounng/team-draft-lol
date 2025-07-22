@@ -8,5 +8,5 @@ import java.util.List;
 
 @Repository
 public interface GameRecordRepository extends JpaRepository<GameRecord, Long> {
-    List<GameRecord> findByUserIdOrderByCreatedAtDesc(String userId);
+    List<GameRecord> findByPool_PoolIdInOrderByCreatedAtDesc(List<Long> poolIds);
 } 

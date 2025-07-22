@@ -42,6 +42,10 @@ public class GameRecord {
     @Builder.Default
     private boolean isApplied = false; // 점수 반영 여부
     
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "pool_id", nullable = false)
+    private Pool pool;
+    
     @OneToMany(mappedBy = "gameRecord", cascade = {CascadeType.PERSIST, CascadeType.MERGE}, fetch = FetchType.LAZY)
     private List<PlayerGameRecord> playerRecords;
     

@@ -37,6 +37,7 @@ interface TeamResultData {
   currentCombination: number;
   totalCombinations: number;
   availableCombinations: number[];
+  poolId: number; // 추가된 필드
 }
 
 const TeamResult = () => {
@@ -248,12 +249,14 @@ const TeamResult = () => {
     navigate("/team-create");
   };
 
+  // 전적 생성 시 poolId 포함
   const handleCreateGameRecord = async () => {
     if (!teamResult) return;
-
     setCreating(true);
     try {
       const token = localStorage.getItem("token");
+      // poolId를 teamResult 또는 상위에서 받아와야 함 (예시)
+      const poolId = teamResult.poolId;
 
       // 현재 포지션에 배치된 플레이어들로 전적 생성
       const team1Players = [
@@ -294,6 +297,7 @@ const TeamResult = () => {
       ];
 
       const gameRecordData = {
+        poolId, // poolId 포함
         team1Won: true, // 기본값
         team1Kills: 0,
         team2Kills: 0,
