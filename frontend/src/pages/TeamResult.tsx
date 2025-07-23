@@ -303,8 +303,6 @@ const TeamResult = () => {
         team2Kills: 0,
         team1Gold: 0,
         team2Gold: 0,
-        team1SupportVision: 0,
-        team2SupportVision: 0,
         playerRecords,
       };
 

@@ -2,8 +2,7 @@ package com.example.teamdraftlol.controller;
 
 import com.example.teamdraftlol.dto.request.GameRecordRequest;
 import com.example.teamdraftlol.dto.response.GameRecordResponse;
-import com.example.teamdraftlol.dto.response.SimulatedScoreResponse;
-import com.example.teamdraftlol.entity.GameRecord;
+import com.example.teamdraftlol.dto.response.SimulatedScoreResponse;  
 import com.example.teamdraftlol.service.GameRecordService;
 import com.example.teamdraftlol.util.JwtUtil;
 import lombok.RequiredArgsConstructor;
@@ -22,15 +21,21 @@ public class GameRecordController {
     private final GameRecordService gameRecordService;
     
     @PostMapping
-    public ResponseEntity<GameRecord> createGameRecord(
+    public ResponseEntity<?> createGameRecord(
             @RequestHeader("Authorization") String authorization,
             @Valid @RequestBody GameRecordRequest request
     ) {
         String token = authorization.replace("Bearer ", "");
         String userId = JwtUtil.getUserIdFromToken(token);
         
-        GameRecord gameRecord = gameRecordService.createGameRecord(userId, request);
-        return ResponseEntity.ok(gameRecord);
+        try {
+            GameRecordResponse response = gameRecordService.createGameRecord(userId, request);
+            return ResponseEntity.ok(response);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("전적 생성 중 오류가 발생했습니다: " + e.getMessage());
+        }
     }
     
     @GetMapping
@@ -44,15 +49,21 @@ public class GameRecordController {
     }
     
     @GetMapping("/{gameId}")
-    public ResponseEntity<GameRecordResponse> getGameRecordById(
+    public ResponseEntity<?> getGameRecordById(
             @RequestHeader("Authorization") String authorization,
             @PathVariable Long gameId
     ) {
         String token = authorization.replace("Bearer ", "");
         String userId = JwtUtil.getUserIdFromToken(token);
         
-        GameRecordResponse gameRecord = gameRecordService.getGameRecordById(gameId, userId);
-        return ResponseEntity.ok(gameRecord);
+        try {
+            GameRecordResponse gameRecord = gameRecordService.getGameRecordById(gameId, userId);
+            return ResponseEntity.ok(gameRecord);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("전적 조회 중 오류가 발생했습니다: " + e.getMessage());
+        }
     }
     
     @PostMapping("/{gameId}/apply")
@@ -102,7 +113,7 @@ public class GameRecordController {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
-    
+
     @PutMapping("/{gameId}")
     public ResponseEntity<GameRecordResponse> updateGameRecord(
             @RequestHeader("Authorization") String authorization,

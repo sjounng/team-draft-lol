@@ -35,6 +35,7 @@ interface GameRecord {
   playerRecords: PlayerGameRecord[];
   isOwner?: boolean; // owner 여부
   isMember?: boolean; // 멤버 여부
+  poolId?: number; // 풀 ID
 }
 
 const RecordDetail = () => {
@@ -50,8 +51,6 @@ const RecordDetail = () => {
   const { isLoggedIn, user } = useAuth();
   const [isOwner, setIsOwner] = useState(false);
   const [isMember, setIsMember] = useState(false);
-  // isMember, setIsMember 삭제
-  // kdaOpponent 변수 삭제
 
   // 편집용 상태
   const [editData, setEditData] = useState({
@@ -121,15 +120,6 @@ const RecordDetail = () => {
     if (gameRecord && user) {
       setIsOwner(!!gameRecord.isOwner);
       setIsMember(!!gameRecord.isMember);
-      // 디버깅용 로그
-      console.log(
-        "user.id:",
-        user.id,
-        "isOwner:",
-        gameRecord.isOwner,
-        "isMember:",
-        gameRecord.isMember
-      );
     }
   }, [gameRecord, user]);
 
@@ -146,12 +136,6 @@ const RecordDetail = () => {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
-
-      // 디버깅: 점수 반영 API 응답 확인
-      console.log("=== 점수 반영 API 응답 ===");
-      console.log("응답 상태:", applyResponse.status);
-      console.log("응답 데이터:", applyResponse.data);
-      console.log("======================");
 
       alert("점수가 성공적으로 반영되었습니다!");
 
@@ -183,6 +167,7 @@ const RecordDetail = () => {
         team2Kills: editData.team2Kills,
         team1Gold: editData.team1Gold,
         team2Gold: editData.team2Gold,
+        poolId: gameRecord.poolId, // 풀 ID 추가
         playerRecords: editData.playerRecords.map((p) => ({
           playerId: p.playerId,
           teamNumber: p.teamNumber,

@@ -22,7 +22,7 @@ public class ProfileController {
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody ProfileRequest req) {
         try {
-            return ResponseEntity.ok(profileService.login(req));
+        return ResponseEntity.ok(profileService.login(req));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }

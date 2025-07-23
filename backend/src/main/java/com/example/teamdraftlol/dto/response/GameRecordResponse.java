@@ -1,5 +1,6 @@
 package com.example.teamdraftlol.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.*;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -19,6 +20,9 @@ public class GameRecordResponse {
     private boolean isApplied;
     private LocalDateTime createdAt;
     private List<PlayerGameRecordResponse> playerRecords;
+    @JsonProperty("isOwner")
     private boolean isOwner; // owner 여부
+    @JsonProperty("isMember")
     private boolean isMember; // 멤버 여부
+    private Long poolId; // 풀 ID
 } 

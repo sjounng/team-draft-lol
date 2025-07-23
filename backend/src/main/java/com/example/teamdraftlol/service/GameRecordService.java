@@ -35,7 +35,7 @@ public class GameRecordService {
     private final PoolRepository poolRepository;
     
     @Transactional
-    public GameRecord createGameRecord(String userId, GameRecordRequest request) {
+    public GameRecordResponse createGameRecord(String userId, GameRecordRequest request) {
         // Pool 조회
         Pool pool = poolRepository.findById(request.getPoolId())
                 .orElseThrow(() -> new IllegalArgumentException("풀을 찾을 수 없습니다."));
@@ -83,7 +83,11 @@ public class GameRecordService {
         
         playerGameRecordRepository.saveAll(playerRecords);
         
-        return savedGameRecord;
+        // 권한 정보 계산
+        boolean isOwner = pool.getOwner().getId().toString().equals(userId);
+        boolean isMember = pool.getMembers().stream().anyMatch(m -> m.getId().toString().equals(userId));
+        
+        return convertToResponse(savedGameRecord, userId, isOwner, isMember);
     }
     
     @Transactional
@@ -94,11 +98,6 @@ public class GameRecordService {
         // Pool의 owner만 점수 반영 가능
         if (!gameRecord.getPool().getOwner().getId().toString().equals(userId)) {
             throw new IllegalArgumentException("풀의 소유자만 점수를 반영할 수 있습니다.");
-        }
-        
-        // 본인의 게임 기록인지 확인
-        if (!gameRecord.getUserId().equals(userId)) {
-            throw new IllegalArgumentException("접근 권한이 없습니다.");
         }
         
         // 이미 반영된 게임인지 확인
@@ -127,9 +126,9 @@ public class GameRecordService {
         GameRecord gameRecord = gameRecordRepository.findById(gameId)
                 .orElseThrow(() -> new IllegalArgumentException("게임 기록을 찾을 수 없습니다."));
         
-        // 본인의 게임 기록인지 확인
-        if (!gameRecord.getUserId().equals(userId)) {
-            throw new IllegalArgumentException("접근 권한이 없습니다.");
+        // Pool의 owner만 점수 반영 취소 가능
+        if (!gameRecord.getPool().getOwner().getId().toString().equals(userId)) {
+            throw new IllegalArgumentException("풀의 소유자만 점수 반영을 취소할 수 있습니다.");
         }
         
         // 반영되지 않은 게임인지 확인
@@ -154,7 +153,7 @@ public class GameRecordService {
             if (futureStreak >= 2) return futureStreak;
             else return 0;
         } else {
-            if (futureStreak <= -2) return futureStreak;
+            if (futureStreak <= -2) return -futureStreak;
             else return 0;
         }
     }
@@ -303,7 +302,16 @@ public class GameRecordService {
         if (isWinner) total = Math.max(10, Math.min(75, total));
         else total = Math.max(-75, Math.min(-10, total));
         // streakBonus 적용
-        int streak = record.getWinLossStreakAtGame() != null ? record.getWinLossStreakAtGame() : 0;
+        Integer storedStreak = record.getWinLossStreakAtGame();
+        int streak;
+        if (storedStreak != null) {
+            streak = storedStreak;
+        } else {
+            // 저장된 값이 없으면 현재 플레이어의 streak 사용
+            Player player = record.getPlayer();
+            Integer currentStreak = player.getWinLossStreak();
+            streak = currentStreak != null ? currentStreak : 0;
+        }
         int streakBonus = getStreakBonus(streak, isWinner);
         total += streakBonus;
         return total;
@@ -336,13 +344,16 @@ public class GameRecordService {
         
         // 풀의 owner 또는 멤버만 열람 가능하도록 권한 체크
         Pool pool = gameRecord.getPool();
-        boolean isOwner = pool.getOwner().getId().toString().equals(userId);
+        String ownerId = pool.getOwner().getId().toString();
+        boolean isOwner = ownerId.equals(userId);
         boolean isMember = pool.getMembers().stream().anyMatch(m -> m.getId().toString().equals(userId));
+        
         if (!isOwner && !isMember) {
             throw new IllegalArgumentException("접근 권한이 없습니다.");
         }
         
-        return convertToResponse(gameRecord, userId);
+        // 권한 정보를 미리 계산해서 전달
+        return convertToResponse(gameRecord, userId, isOwner, isMember);
     }
 
     @Transactional
@@ -401,10 +412,10 @@ public class GameRecordService {
         
         playerGameRecordRepository.saveAll(newPlayerRecords);
         
-        return convertToResponse(savedGameRecord, userId);
+        return convertToResponse(savedGameRecord, userId, isOwner, isMember);
     }
 
-    private GameRecordResponse convertToResponse(GameRecord gameRecord, String userId) {
+    public GameRecordResponse convertToResponse(GameRecord gameRecord, String userId, boolean isOwner, boolean isMember) {
         List<PlayerGameRecord> playerRecords = playerGameRecordRepository.findByGameRecord_GameId(gameRecord.getGameId());
         
         List<PlayerGameRecordResponse> playerResponses = playerRecords.stream()
@@ -447,13 +458,6 @@ public class GameRecordService {
                 })
                 .collect(Collectors.toList());
         
-        Pool pool = gameRecord.getPool();
-        String poolOwnerId = pool.getOwner().getId().toString();
-        List<String> poolMembers = pool.getMembers().stream()
-            .map(member -> member.getId().toString())
-            .collect(Collectors.toList());
-        boolean isOwner = poolOwnerId.equals(userId);
-        boolean isMember = poolMembers.contains(userId);
         return GameRecordResponse.builder()
                 .gameId(gameRecord.getGameId())
                 .team1Won(gameRecord.isTeam1Won())
@@ -466,6 +470,7 @@ public class GameRecordService {
                 .playerRecords(playerResponses)
                 .isOwner(isOwner)
                 .isMember(isMember)
+                .poolId(gameRecord.getPool().getPoolId())
                 .build();
     }
     
@@ -572,17 +577,19 @@ public class GameRecordService {
         for (PlayerGameRecord record : playerRecords) {
             playerMap.put(record.getPlayer().getPlayerId(), record.getPlayer());
         }
-        // 점수 계산 및 역적용 (빼기)
-        // reverseScoreChanges(gameRecord, playerRecords, playerMap); // 삭제됨
+        // 점수 되돌리기 로직은 현재 구현되지 않음
     }
 
     @Transactional
     public void deleteGameRecord(Long gameId, String userId) {
         GameRecord gameRecord = gameRecordRepository.findById(gameId)
                 .orElseThrow(() -> new IllegalArgumentException("게임 기록을 찾을 수 없습니다."));
-        if (!gameRecord.getUserId().equals(userId)) {
-            throw new IllegalArgumentException("접근 권한이 없습니다.");
+        
+        // 풀의 owner만 삭제할 수 있음
+        if (!gameRecord.getPool().getOwner().getId().toString().equals(userId)) {
+            throw new IllegalArgumentException("풀의 소유자만 전적을 삭제할 수 있습니다.");
         }
+        
         // 점수 되돌리기 없이 바로 삭제
         List<PlayerGameRecord> playerRecords = playerGameRecordRepository.findByGameRecord_GameId(gameId);
         playerGameRecordRepository.deleteAll(playerRecords);

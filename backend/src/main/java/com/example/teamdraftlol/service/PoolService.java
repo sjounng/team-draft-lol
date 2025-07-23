@@ -85,8 +85,8 @@ public class PoolService {
             throw new IllegalArgumentException("Pool not found");
         }
         // 소유자이거나 멤버인지 확인
-        boolean hasAccess = pool.getOwner().getId().equals(userId) ||
-                pool.getMembers().stream().anyMatch(member -> member.getId().equals(userId));
+        boolean hasAccess = pool.getOwner().getId().equals(userId) || 
+                           pool.getMembers().stream().anyMatch(member -> member.getId().equals(userId));
         if (!hasAccess) {
             throw new IllegalArgumentException("권한이 없습니다.");
         }
