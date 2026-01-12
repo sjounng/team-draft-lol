@@ -4,9 +4,6 @@ League of Legends 팀 구성 도구입니다. 플레이어들을 풀에 추가�
 
 ## 🚀 배포 URL
 
-- **프론트엔드**: https://lol-team-draft-frontend-h3rqtkrlv-junwoo-songs-projects.vercel.app
-- **백엔드**: https://lol-team-draft-backend.vercel.app
-
 ## 🛠️ 기술 스택
 
 ### Frontend
